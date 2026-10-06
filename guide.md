@@ -67,10 +67,13 @@ hcloud（KooCLI）是华为云官方命令行工具，是整套装的核心执�
 # 创建安装目录
 New-Item -ItemType Directory -Force -Path "$env:USERPROFILE\.local\bin" | Out-Null
 
-# 下载 KooCLI（中国站镜像）
+# 下载 KooCLI（国际站官方镜像）
 Invoke-WebRequest `
-  -Uri "https://cn-north-1-hcli-obs.obs.cn-north-1.myhuaweicloud.com/hcli/hcloud.exe" `
-  -OutFile "$env:USERPROFILE\.local\bin\hcloud.exe"
+  -Uri "https://ap-southeast-3-hwcloudcli.obs.ap-southeast-3.myhuaweicloud.com/cli/latest/huaweicloud-cli-windows-amd64.zip" `
+  -OutFile "$env:TEMP\huaweicloud-cli-windows-amd64.zip"
+
+# 解压得到 hcloud.exe
+Expand-Archive "$env:TEMP\huaweicloud-cli-windows-amd64.zip" -DestinationPath "$env:USERPROFILE\.local\bin" -Force
 
 # 加入 PATH（当前会话生效）
 $env:Path += ";$env:USERPROFILE\.local\bin"
@@ -79,20 +82,36 @@ $env:Path += ";$env:USERPROFILE\.local\bin"
 hcloud version
 ```
 
-**Linux / macOS：**
+**Linux（AMD64 / Arm64）— 一键安装：**
 
 ```bash
-mkdir -p ~/.local/bin
-curl -fsSL https://cn-north-1-hcli-obs.obs.cn-north-1.myhuaweicloud.com/hcli/hcloud \
-  -o ~/.local/bin/hcloud
-chmod +x ~/.local/bin/hcloud
-export PATH="$HOME/.local/bin:$PATH"
+curl -sSL https://ap-southeast-3-hwcloudcli.obs.ap-southeast-3.myhuaweicloud.com/cli/latest/hcloud_install.sh \
+  -o ./hcloud_install.sh && bash ./hcloud_install.sh -y
+# 默认安装到 /usr/local/hcloud/ 并移动到 /usr/local/bin/
 hcloud version
 ```
 
+**Linux / macOS — 手动安装（以 Linux AMD64 为例）：**
+
+```bash
+curl -LO "https://ap-southeast-3-hwcloudcli.obs.ap-southeast-3.myhuaweicloud.com/cli/latest/huaweicloud-cli-linux-amd64.tar.gz"
+tar -zxvf huaweicloud-cli-linux-amd64.tar.gz
+mv $(pwd)/hcloud /usr/local/bin/
+hcloud version
+```
+
+> 其他架构把文件名换成 `huaweicloud-cli-linux-arm64.tar.gz`、
+> `huaweicloud-cli-mac-amd64.tar.gz`、`huaweicloud-cli-mac-arm64.tar.gz`（同一镜像桶 `cli/latest/` 路径）。
+
+**官方安装文档（国际站）**：
+
+- Windows：<https://support.huaweicloud.com/intl/en-us/qs-hcli/hcli_02_003_01.html>
+- Linux：<https://support.huaweicloud.com/intl/en-us/qs-hcli/hcli_02_003_02.html>
+- macOS：<https://support.huaweicloud.com/intl/en-us/qs-hcli/hcli_02_003_03.html>
+
 ### 3.2 配置 AK/SK 凭证
 
-AK/SK 获取路径：华为云控制台 → 右上角头像 → **我的凭证** → **访问密钥**。
+AK/SK 获取路径（国际站）：打开 [console-intl.huaweicloud.com](https://console-intl.huaweicloud.com) → 右上角头像 → **My Credentials（我的凭证）** → **Access Keys（访问密钥）**。
 
 ```bash
 # 交互式初始化
@@ -174,9 +193,18 @@ terraform version   # 期望 v1.15.2
 > 也可以用技能一键完成：对话输入 **"安装 Terraform 1.15.2 + 华为云 provider"**，
 > 由 `huawei-cloud-terraform-installer` 自动处理。
 
-### 4.2 配置华为云 provider 本地镜像
+### 4.2 安装华为云 provider（默认：直连官方 registry）
 
-国内/内网环境直接 `terraform init` 拉取 provider 可能超时，推荐配置**文件系统镜像**：
+海外/公网环境**无需配置镜像**，`terraform init` 会自动从官方 registry 拉取：
+
+```bash
+terraform init
+# 期望输出: Installed huaweicloud/huaweicloud v1.97.2
+```
+
+### 4.3 可选：本地文件镜像（仅离线 / 内网受限环境）
+
+仅当网络受限（内网隔离等）无法直连 registry 时，才配置**文件系统镜像**：
 
 ```powershell
 # 1) 准备目录（版本号与所需一致）
@@ -189,9 +217,7 @@ New-Item -ItemType Directory -Force -Path $mirror | Out-Null
 #    下载后重命名为 terraform-provider-huaweicloud_v1.97.2.exe
 ```
 
-### 4.3 配置 terraform.rc（使用本地镜像）
-
-在 `%APPDATA%\terraform.rc` 写入：
+然后配置 `%APPDATA%\terraform.rc` 使用该镜像：
 
 ```hcl
 provider_installation {
@@ -376,7 +402,7 @@ ls ~/.ssh/id_rsa ~/.ssh/id_rsa.pub
 |------|------|------|
 | `hcloud configure show` 显示 `HPU****G9I` | AK/SK 加密存储，脱敏显示属正常 | 无需处理，直接使用 |
 | `[USE_ERROR]不支持的服务名称:BSS` | 国际站账单不支持中国站 `BSS` | 改用 `BSSINTL` + `--cli-region=ap-southeast-1` |
-| `terraform init` 卡住/超时 | provider 需联网下载 | 配置 `filesystem_mirror`（见 4.2/4.3） |
+| `terraform init` 卡住/超时 | 网络无法直连官方 registry | 海外/公网直连即可；受限环境配置 `filesystem_mirror`（见 4.3） |
 | Terraform 报 `Authentication failed` | 未传凭证或临时凭证过期 | 设置 `TF_VAR_access_key/secret_key/security_token` |
 | Agency 临时凭证无权建资源 | Agency 未绑定权限 | 绑定项目级权限（ECS/VPC/EIP/EVS FullAccess） |
 | KPS 密钥对无法绑定 ECS | 密钥对 user_id 与临时凭证不匹配 | 用 `admin_pass` 创建，登录后推送公钥 |
